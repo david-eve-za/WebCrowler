@@ -1,0 +1,6 @@
+tinydb
+argparse
+beautifulsoup4
+requests
+pillow
+pandas
