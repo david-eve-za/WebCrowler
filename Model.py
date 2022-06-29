@@ -1,5 +1,5 @@
 import uuid
-from typing import TypedDict, List
+from typing import List
 
 
 class ChapterInfo:
