@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 import shutil
 
@@ -8,8 +7,8 @@ from PIL import Image
 from bs4 import BeautifulSoup
 
 from DBManager import ItemsManager
-from Model import BookInfo, ChapterInfo
-from common import get_base_path, get_base_url, get_wp_url
+from Model import ChapterInfo
+from common import get_base_path, get_wp_url
 from utils import compare_two_lists
 
 
@@ -19,7 +18,7 @@ def argument_definition():
     parser.add_argument("-a", "--add", dest="book_name", help="Name of the book")
     parser.add_argument("--tmo", action="store_true")
     parser.add_argument("--djs", action="store_true")
-    parser.add_argument("-u", "--update", action="store_true", help="Update book count")
+    parser.add_argument("-u", "--update", action="store_true", help="Download book metadata")
     parser.add_argument("-l", "--list", action="store_true", help="List all Books and chapters")
     parser.add_argument("-d", "--download", action="store_true", help="Download all Books and chapters")
 
@@ -52,11 +51,11 @@ def get_pictures(img_url) -> []:
     return images
 
 
-def download_picture(pic_url, _chPath):
-    response = requests.get(pic_url, stream=True)
-    path = os.path.join(_chPath, pic_url.split('/')[-1])
-    if not os.path.exists(_chPath):
-        os.makedirs(_chPath)
+def download_picture(picture_url, chapter_path):
+    response = requests.get(picture_url, stream=True)
+    path = os.path.join(chapter_path, picture_url.split('/')[-1])
+    if not os.path.exists(chapter_path):
+        os.makedirs(chapter_path)
     with open(path, 'wb') as out_file:
         shutil.copyfileobj(response.raw, out_file)
     return path
@@ -100,19 +99,23 @@ def download_metadata():
 
 
 def download_books():
-    for d in mngr.list():
-        b = Book(d)
-        tbp = os.path.join(get_base_path(), b.get_name(False))
-        pages = get_page_list(f'{get_base_url()}{b.get_name(False)}')
-        for p in pages:
-            pdf_name = os.path.join(tbp, f'{p.split("/")[-2]}.pdf')
+    for book in ItemsManager().get_all_books():
+        to_be_processed = os.path.join(get_base_path(), book.get_title().split("/")[-1])
+        pages = get_page_list(book.get_title())
+        for page in pages:
+            pdf_name = os.path.join(to_be_processed, f'{page.split("/")[-2]}.pdf')
             if not os.path.exists(pdf_name):
-                imgs = get_pictures(p)
-                if len(imgs) > 0:
-                    img_d = []
-                    for i in imgs:
-                        img_d.append(download_picture(i, tbp))
-                    create_pdf(img_d, pdf_name)
+                images = get_pictures(page)
+                if len(images) > 0:
+                    images_downloaded = []
+                    for image in images:
+                        images_downloaded.append(download_picture(image, to_be_processed))
+                    create_pdf(images_downloaded, pdf_name)
+
+
+def show_books():
+    for book in ItemsManager().get_all_books():
+        print(book.get_title())
 
 
 def process_args(args):
@@ -121,28 +124,12 @@ def process_args(args):
     if args.list:
         show_books()
     if args.update:
-        update_book_count()
+        download_metadata()
     if args.download:
         download_books()
 
 
 if __name__ == '__main__':
-    # args = argument_definition()
-    # print(args)
-    # process_args(args)
-    download_metadata()
-    for i in mngr.list():
-        bk = Book(i)
-        bki = BookInfo()
-        bki.title(f'{get_base_url()}{bk.get_name(False)}')
-        pages = get_page_list(f'{get_base_url()}{bk.get_name(False)}')
-        pages.reverse()
-        for p in pages:
-            chi = ChapterInfo()
-            chi.title(p)
-            imgs = get_pictures(p)
-            for im in imgs:
-                chi.pages(im)
-            bki.chapters(chi)
-        print(json.dumps(bki.get_data(), indent=4))
-        ItemsManager().update_books(bki)
+    args = argument_definition()
+    print(args)
+    process_args(args)
