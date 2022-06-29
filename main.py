@@ -7,12 +7,10 @@ import requests
 from PIL import Image
 from bs4 import BeautifulSoup
 
-from DBManager import Book, DBManager, ItemsManager
+from DBManager import ItemsManager
 from Model import BookInfo, ChapterInfo
 from common import get_base_path, get_base_url, get_wp_url
 from utils import compare_two_lists
-
-mngr = DBManager()
 
 
 def argument_definition():
@@ -28,8 +26,8 @@ def argument_definition():
     return parser.parse_args()
 
 
-def get_page_list(URL_Page) -> []:
-    page = requests.get(URL_Page)
+def get_page_list(page_url) -> []:
+    page = requests.get(page_url)
     soup = BeautifulSoup(page.content, "html.parser")
     results = soup.find(rel="shortlink")
     index = results['href'].split('=')[1]
@@ -40,7 +38,7 @@ def get_page_list(URL_Page) -> []:
     chapter_list = []
     for a in soup.find_all('a', href=True):
         # print("found URL: {}".format(a['href']))
-        if a['href'] != '#' and a['href'] != URL_Page + '/':
+        if a['href'] != '#' and a['href'] != page_url + '/':
             chapter_list.append(a['href'])
     return chapter_list
 
@@ -48,10 +46,10 @@ def get_page_list(URL_Page) -> []:
 def get_pictures(img_url) -> []:
     page = requests.get(img_url)
     soup = BeautifulSoup(page.content, "html.parser")
-    img = []
-    for i in soup.find_all(class_='wp-manga-chapter-img'):
-        img.append(i['src'].strip())
-    return img
+    images = []
+    for image in soup.find_all(class_='wp-manga-chapter-img'):
+        images.append(image['src'].strip())
+    return images
 
 
 def download_picture(pic_url, _chPath):
@@ -65,66 +63,40 @@ def download_picture(pic_url, _chPath):
 
 
 def add_book(args):
-    if not args.tmo or not args.djs:
-        print("Debe seleccionar al menos un servidor")
-        exit(1)
-    elif args.tmo and args.djs:
-        print("Debe seleccionar solo un servidor")
-        exit(1)
-    book = Book()
-    book.set_name(args.book_name)
-    if args.tmo:
-        book.set_server_id("tmo")
-    else:
-        book.set_server_id("djs")
-    book.save()
+    # TODO Implement this function for add new books
+    pass
 
 
-def show_books():
-    for d in mngr.list():
-        b = Book(d)
-        print(b)
-
-
-def update_book_count():
-    for d in mngr.list():
-        b = Book(d)
-        pages = get_page_list(f'{get_base_url()}{b.get_name(False)}')
-        b.set_chapters(len(pages))
-        b.save()
-
-
-def remove(tbp):
+def remove_file(tbp):
     for f in tbp:
         os.unlink(f)
 
 
-def create_pdf(tbp, filename):
+def create_pdf(to_be_process, pdf_name):
     images = []
-    for f in tbp:
-        if os.path.getsize(f) > 0:
-            image = Image.open(f)
+    for file_name in to_be_process:
+        if os.path.getsize(file_name) > 0:
+            image = Image.open(file_name)
             image = image.convert('RGB')
             images.append(image)
-    images[0].save(filename, save_all=True, append_images=images[1:])
-    print(f'Created {filename}')
-    remove(tbp)
+    images[0].save(pdf_name, save_all=True, append_images=images[1:])
+    print(f'Created {pdf_name}')
+    remove_file(to_be_process)
 
 
 def download_metadata():
-    for b in ItemsManager().get_all_books():
-        b = BookInfo(b)
-        pages = get_page_list(b.get_title())
-        pages.reverse()
-        not_in_list = compare_two_lists(b.get_data()['chapters'], pages)
+    for book in ItemsManager().get_all_books():
+        chapters = get_page_list(book.get_title())
+        chapters.reverse()
+        not_in_list = compare_two_lists(book.get_data()['chapters'], chapters)
         for i in not_in_list:
-            chi = ChapterInfo()
-            chi.title(i)
-            imgs = get_pictures(i)
-            for im in imgs:
-                chi.pages(im)
-            b.chapters(chi)
-        ItemsManager().update_books(b)
+            chapter_info = ChapterInfo()
+            chapter_info.title(i)
+            images = get_pictures(i)
+            for image in images:
+                chapter_info.pages(image)
+            book.chapters(chapter_info)
+        ItemsManager().update_books(book)
 
 
 def download_books():
